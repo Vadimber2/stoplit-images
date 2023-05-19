@@ -1,6 +1,7 @@
+transformers
+open_clip_torch
 torch
 torchvision
-openai-clip
 pillow
 pinecone-client
 requests
