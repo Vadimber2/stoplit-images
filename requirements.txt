@@ -1,0 +1,7 @@
+torch
+torchvision
+openai-clip
+pillow
+pinecone-client
+requests
+lxml
