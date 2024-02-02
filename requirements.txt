@@ -2,7 +2,10 @@ transformers
 open_clip_torch
 torch
 torchvision
-pillow
+pillow~=10.2.0
 pinecone-client
-requests
-lxml
+requests~=2.31.0
+lxml~=5.1.0
+
+tqdm~=4.66.1
+cog
