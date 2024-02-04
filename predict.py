@@ -6,6 +6,8 @@ from pinecone import Pinecone
 from io import BytesIO
 from cog import BasePredictor, Path, Input
 import time
+from open_clip.utils import convert_int8_model_to_inference_mode
+import bitsandbytes as bnb
 
 class Predictor(BasePredictor):
 
@@ -30,7 +32,23 @@ class Predictor(BasePredictor):
             pretrained="mscoco_finetuned_laion2B-s13B-b90k"
         )
 
-        self.im_model.to(self.device).eval()
+        #self.im_model.to(self.device).eval()
+
+
+        model = self.im_model.cpu()
+        int8_linear_layer = bnb.nn.triton_based_modules.SwitchBackLinear
+        # replace linear layers, for now just replace FFN - more coming in later PR
+        self.int8_model = (open_clip.utils.replace_linear
+                           (model,
+                            int8_linear_layer,
+                            include_modules=['c_fc', 'c_proj']).to(self.device))
+
+        convert_int8_model_to_inference_mode(self.int8_model)
+
+        self.int8_model.to(self.device).eval()
+
+        self.im_model = self.int8_model
+
 
     def get_caption(self, image, model, transform) -> str:
         im = transform(image).unsqueeze(0).to(self.device)
@@ -96,7 +114,8 @@ if __name__ == "__main__":
 
     for i in range(5):
         start_time = time.time()
-        print(predictor.predict("test.jpg", use_simple=False))
+        out = predictor.predict("test.jpg", use_simple=False)
+        #print(out)
         end_time = time.time()
         duration = end_time - start_time
         print(f"Время выполнения: {duration} секунд.")
