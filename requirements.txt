@@ -1,12 +1,13 @@
 torch==1.13.1
 transformers
-open_clip_torch
-torch==2.0.0.post1
+triton==2.0.0.post1
 torchvision==0.14.1
 pillow~=10.2.0
 pinecone-client
 requests~=2.31.0
 lxml~=5.1.0
+bitsandbytes
+open_clip_torch
 
 tqdm~=4.66.1
 cog
