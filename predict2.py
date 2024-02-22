@@ -6,6 +6,8 @@ from pinecone import Pinecone
 from io import BytesIO
 from cog import BasePredictor, Path, Input
 import time
+import os
+
 
 class Predictor(BasePredictor):
 
@@ -40,13 +42,16 @@ class Predictor(BasePredictor):
                     generated = model.generate(im)
             else:
                 generated = model.generate(im)
+                # Длина вывода не фиксирована для гибкости описания
         caption = open_clip.decode(generated[0])
         return caption
 
     def predict(self,
                 image: Path = Input(description="Input image"),
                 use_advanced_processing: bool = False,
-                use_simple: bool = False
+                use_simple: bool = False,
+                top_items=30,
+                include_metadata: bool = True
                 ) -> str:
         if use_simple:
             time.sleep(0.2)
@@ -69,7 +74,9 @@ class Predictor(BasePredictor):
         #    new_image_embedding = self.model.encode_image(preprocessed_new_image)
         image_caption = self.get_caption(new_image, self.im_model, self.im_transform)
         image_caption = (image_caption.replace("<start_of_text>", "").replace("<end_of_text>", "")).strip()
-        #print(image_caption)
+
+        # image_caption= "office chair"
+        print(image_caption)
 
         text_inputs = self.tokenizer(image_caption).to(self.device)
 
@@ -78,28 +85,36 @@ class Predictor(BasePredictor):
 
         with torch.no_grad():
             image_embeddings = self.im_model.encode_image(preprocessed_new_image)
+            image_embeddings = 1 * image_embeddings
             text_embeddings = self.im_model.encode_text(text_inputs)
+            text_embeddings = 1 * text_embeddings
 
         combined_embeddings = torch.cat((image_embeddings, text_embeddings), dim=1)
 
         search_results = self.index.query(
-            top_k=10,
+            top_k=top_items,
             vector=combined_embeddings.tolist(),
-            include_metadata=True
+            include_metadata= include_metadata
         )
 
         return str(search_results)
+
 
 if __name__ == "__main__":
     predictor = Predictor()
     predictor.setup()
 
-    for i in range(5):
-        start_time = time.time()
+    out = predictor.predict("testpicts/chair4.png", use_simple=False, use_advanced_processing=True, top_items=1000, include_metadata=False)
 
-        out= predictor.predict("test.jpg", use_simple=False)
-        #print(out)
-        end_time = time.time()
-        duration = end_time - start_time
-        print(f"Время выполнения: {duration} секунд.")
-    print("\n")
+    json_file_path = "output.json"
+    with (open(json_file_path, mode='w', newline='', encoding='utf-8') as file):
+        file.write(out)
+
+    print(out)
+    # for i in range(5):
+    #    start_time = time.time()
+    #    print(predictor.predict("test.jpg", use_simple=False))
+    #    end_time = time.time()
+    #    duration = end_time - start_time
+    #    print(f"Время выполнения: {duration} секунд.")
+    # print("\n")
