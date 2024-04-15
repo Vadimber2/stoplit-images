@@ -5,18 +5,51 @@ from PIL import Image
 from pinecone import Pinecone
 from io import BytesIO
 from cog import BasePredictor, Path, Input
+import pandas as pd
 import time
+
 #import os
+
+
+class PineconeIndexManager:
+    def __init__(self, csv_file):
+        self.region_to_index = {}
+        self.load_and_initialize_indexes(csv_file)
+
+    def load_and_initialize_indexes(self, file_path):
+        data = pd.read_csv(file_path)
+        index_name = "clip-embeddings"  # Имя индекса одинаково для всех
+
+        for _, row in data.iterrows():
+            region = row['region']
+            api_key = row['key']
+            pc = Pinecone(api_key=api_key)
+
+            # Проверка существования индекса
+            if index_name not in pc.list_indexes().names():
+                raise ValueError(f"Index {index_name} does not exist for region: {region}")
+
+            # Сохраняем объект индекса в словаре
+            self.region_to_index[region] = pc.Index(index_name)
+            print(f"Connection to index for {region} is established.")
+
+    def get_index_by_region(self, region):
+        index = self.region_to_index.get(region)
+        if not index:
+            raise ValueError(f"No index found for region: {region}")
+        return index
 
 
 class Predictor(BasePredictor):
 
     def setup(self):
-        api_key = "73f171c4-1136-4c95-90e2-ea857b7e364d"
-        pc = Pinecone(api_key=api_key)
+        #api_key = "73f171c4-1136-4c95-90e2-ea857b7e364d"
+        #pc = Pinecone(api_key=api_key)
 
-        index_name = "clip-embeddings"
-        self.index = pc.Index(index_name)
+        #index_name = "clip-embeddings"
+        #self.index = pc.Index(index_name)
+
+        self.manager = PineconeIndexManager('bases.csv')
 
         if torch.cuda.is_available():
             self.device = "cuda"
@@ -48,6 +81,7 @@ class Predictor(BasePredictor):
 
     def predict(self,
                 image: Path = Input(description="Input image"),
+                region:str="mb_moscow",
                 image_processing_quality: str = 'middle',
                 use_simple: bool = False,
                 top_items: int = 30,
@@ -85,7 +119,7 @@ class Predictor(BasePredictor):
         image_caption = (image_caption.replace("<start_of_text>", "").replace("<end_of_text>", "")).strip()
 
         # image_caption= "office chair"
-        # print(image_caption)
+        print(image_caption)
 
         text_inputs = self.tokenizer(image_caption).to(self.device)
 
@@ -100,7 +134,8 @@ class Predictor(BasePredictor):
 
         combined_embeddings = torch.cat((image_embeddings, text_embeddings), dim=1)
 
-        search_results = self.index.query(
+        index = self.manager.get_index_by_region(region)
+        search_results = index.query(
             top_k=top_items,
             vector=combined_embeddings.tolist(),
             include_metadata= include_metadata
@@ -113,11 +148,13 @@ if __name__ == "__main__":
     predictor = Predictor()
     predictor.setup()
 
-    out = predictor.predict(image = "testpicts/chair4.png",
+    out = predictor.predict(image = "testpicts/tvarea.jpg",
                             use_simple=False,
                             image_processing_quality='high',
-                            top_items=30,
-                            include_metadata=False)
+                            top_items=500,
+                            image_weight= 3,
+                            text_weight =1,
+                            include_metadata=True)
 
     #json_file_path = "output.json"
     #with (open(json_file_path, mode='w', newline='', encoding='utf-8') as file):
