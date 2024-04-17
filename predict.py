@@ -2,7 +2,7 @@ import torch
 import open_clip
 #from open_clip import tokenizer
 from PIL import Image
-from pinecone import Pinecone
+from pinecone import Pinecone, PodSpec
 from io import BytesIO
 from cog import BasePredictor, Path, Input
 import pandas as pd
@@ -27,7 +27,14 @@ class PineconeIndexManager:
 
             # Проверка существования индекса
             if index_name not in pc.list_indexes().names():
-                raise ValueError(f"Index {index_name} does not exist for region: {region}")
+                #raise ValueError(f"Index {index_name} does not exist for region: {region}")
+                print(f"Creating index for region: {region}")
+                pc.create_index(
+                    name=index_name,
+                    metric="cosine",
+                    dimension=1536,
+                    spec=PodSpec("gcp-starter")
+                )
 
             # Сохраняем объект индекса в словаре
             self.region_to_index[region] = pc.Index(index_name)
@@ -39,9 +46,33 @@ class PineconeIndexManager:
             raise ValueError(f"No index found for region: {region}")
         return index
 
+    def get_index_by_region2(self, region):
+        index = self.region_to_index.get(region)
+        api_key = self.region_to_key.get(region)
+
+        if not api_key:
+            raise ValueError(f"No API key found for region: {region}")
+
+        if not index:
+            raise ValueError(f"No index found for region: {region}")
+
+        # Проверяем состояние индекса
+        try:
+            # Попробуем получить статистику индекса как проверку его доступности
+            index_info = index.info()
+            if not index_info:
+                raise Exception("Failed to retrieve index info, connection might be lost.")
+        except Exception as e:
+            # Переподключение в случае потери соединения
+            print(f"Reconnecting due to error: {e}")
+            pc = Pinecone(api_key=api_key)
+            self.region_to_index[region] = pc.Index("clip-embeddings")
+            print(f"Reconnected to index for {region}.")
+
+        return self.region_to_index[region]
+
 
 class Predictor(BasePredictor):
-
     def setup(self):
         #api_key = "73f171c4-1136-4c95-90e2-ea857b7e364d"
         #pc = Pinecone(api_key=api_key)
@@ -149,6 +180,7 @@ if __name__ == "__main__":
     predictor.setup()
 
     out = predictor.predict(image = "testpicts/tvarea.jpg",
+                            region = "mb_ekaterinburg",
                             use_simple=False,
                             image_processing_quality='high',
                             top_items=500,

@@ -23,6 +23,7 @@ build:
     - "pinecone-client"
     - "requests"
     - "lxml"
+    - "pandas"
   # commands run after the environment is setup
   # run:
     # - "echo env is ready!"
