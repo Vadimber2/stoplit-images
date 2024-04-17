@@ -71,6 +71,10 @@ class Predictor(BasePredictor):
                 print(f"Reconnected to index for {region}.")
 
             return self.region_to_index[region]
+
+    def __init__(self):
+        self.manager = None
+
     def setup(self):
         #api_key = "73f171c4-1136-4c95-90e2-ea857b7e364d"
         #pc = Pinecone(api_key=api_key)
